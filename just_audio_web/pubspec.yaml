@@ -16,7 +16,7 @@ dependencies:
   just_audio_platform_interface:
     git:
       url: https://github.com/ryanheise/just_audio.git
-      branch: visualizer-fix-dependency
+      ref: visualizer-fix-dependency
       path: just_audio_platform_interface
   flutter:
     sdk: flutter
