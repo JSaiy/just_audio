@@ -11,6 +11,7 @@
 #import <stdlib.h>
 #include <TargetConditionals.h>
 #include "AndroidFFT.h"
+#import <malloc/malloc.h>
 
 typedef struct JATapStorage {
     void *self;
@@ -473,19 +474,25 @@ static void processTap(MTAudioProcessingTapRef tap, CMItemCount frameCount, MTAu
     
     // TODO: Take captureRate into account. Maybe let the main thread
     // periodically take samples, and we provide them here in a CMSimpleQueue.
-    AudioPlayer *self = (__bridge AudioPlayer *)(storage->self);
-    // NOTE: Apple recommends to NOT allocate any memory in the tap process function.
-    // TODO: Check impact on performance and memory.
+    if (malloc_zone_from_ptr(storage->self)) {
+        AudioPlayer *self = (__bridge AudioPlayer *)(storage->self);
+        
+        // NOTE: Apple recommends to NOT allocate any memory in the tap process function.
+        // TODO: Check impact on performance and memory.
+        // FFT
+        UInt8 *fftMag = (UInt8*)storage->fft;
+        [AndroidFFT doFft:fftMag :waveform :captureSize];
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSData *data = [NSData dataWithBytes:(void *)waveform length:captureSize];
+            NSData *data2 = [NSData dataWithBytes:(void *)fftMag length:captureSize];
+            
+            [self broadcastVisualizerCapture:data :data2 samplingRate:(int)(storage->samplingRate)];
+        });
+    } else {
+        NSLog(@"EXC_BAD_ACCESS");
+    }
     
-    // FFT
-    UInt8 *fftMag = (UInt8*)storage->fft;
-    [AndroidFFT doFft:fftMag :waveform :captureSize];
-    
-    dispatch_async(dispatch_get_main_queue(), ^{
-        NSData *data = [NSData dataWithBytes:(void *)waveform length:captureSize];
-        NSData *data2 = [NSData dataWithBytes:(void *)fftMag length:captureSize];
-        [self broadcastVisualizerCapture:data :data2 samplingRate:(int)(storage->samplingRate)];
-    });
 }
 
 static void unprepareTap(MTAudioProcessingTapRef tap) {
